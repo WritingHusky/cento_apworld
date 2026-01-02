@@ -1,26 +1,30 @@
 from worlds.generic.Rules import exclusion_rules
 from BaseClasses import Region, Entrance, Tutorial, Item
 from worlds.AutoWorld import World, WebWorld
-from worlds.LauncherComponents import Component, components
 from multiprocessing import Process
+from worlds.LauncherComponents import (
+    Component,
+    components,
+    icon_paths,
+    launch as launch_component,
+    Type,
+)
 
 
-def run_client():
-    print("running cento client")
-    from .CentoClient import main  # lazy import
+def launch_client(*args: str):
+    from .CentoClient import launch
 
-    p = Process(target=main)
-    p.start()
+    launch_component(launch, name="CentoClient", args=args)
 
 
-components.append(Component("cento Client", "centoClient"))
-# components.append(Component("cento Client", func=run_client))
-
-
-def data_path(file_name: str):
-    import pkgutil
-
-    return pkgutil.get_data(__name__, "data/" + file_name)
+components.append(
+    Component(
+        "Cento Client",
+        "CentoClient",
+        func=launch_client,
+        component_type=Type.CLIENT,
+    )
+)
 
 
 class CentoWeb(WebWorld):
