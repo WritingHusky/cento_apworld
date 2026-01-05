@@ -22,7 +22,7 @@ from CommonClient import (
 )
 from Utils import async_start
 
-DEBUG = False
+DEBUG = True
 
 
 # This code is largely based on the Hat in Time Client! Special thanks to Cookiecat for the pointers!
@@ -65,6 +65,7 @@ class CentoContext(CommonContext):
             "ClientPong",
             "ProxyDisconnect",
         ]
+        self.rate_limit_flag = asyncio.Event()
 
     async def server_auth(self, password_requested: bool = False):
         if password_requested and not self.password:
@@ -242,12 +243,25 @@ async def proxy(websocket, path: str = "/", ctx: CentoContext = None):
         await ctx.disconnect_proxy()
 
 
-async def parse_game_packets(ctx: CentoContext, data):
+async def parse_game_packets(ctx: CentoContext, data: str):
     for msg in decode(data):
         if msg["cmd"] == "ClientPing":
             # Ensure that the client is still connected to the text client using a special packet
             text = encode([{"cmd": "ClientPong"}])
-            await ctx.send_msgs_proxy(text)
+
+            # Rate limiting this packet
+            async def rate_limit():
+                if ctx.rate_limit_flag.is_set():
+                    return
+                ctx.rate_limit_flag.set()
+                await asyncio.sleep(1)
+                await ctx.send_msgs_proxy(text)
+                ctx.rate_limit_flag.clear()
+
+            asyncio.create_task(rate_limit())
+        elif msg["cmd"] == "DisconnectProxy":
+            logger.info("Disconnecting from Cento")
+            await ctx.disconnect_proxy()
         # dont send further packets if not connected with server yet
         # connected is only set to true if we've actually received the initial connection data from the server
         elif not ctx.connected:
@@ -256,7 +270,7 @@ async def parse_game_packets(ctx: CentoContext, data):
         elif msg["cmd"] == "Connect":
             # Proxy is connecting, make sure it is valid
             if msg["game"] != "Cento":
-                logger.info("Aborting proxy connection: game is not Pizza Tower")
+                logger.info("Aborting proxy connection: game is not Cento")
                 await ctx.disconnect_proxy()
                 break
             # send over connection data and receiveditems if valid
@@ -305,7 +319,7 @@ def launch(*launch_args: str):
         ctx.proxy = websockets.serve(
             functools.partial(proxy, ctx=ctx),
             host="localhost",
-            port=12412,
+            port=18318,
             ping_timeout=999999,
             ping_interval=999999,
         )
